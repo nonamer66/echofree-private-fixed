@@ -31,6 +31,7 @@ jobs:
 
       - name: Create checksum
         run: |
+          sudo chown -R "$USER":"$USER" output
           cd output
           sha256sum echofree-amd64.iso > echofree-amd64.iso.sha256
 
