@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+[[ $EUID -eq 0 ]] || {
+  echo "Run with: sudo echofree-setup"
+  exit 1
+}
+
+ENV_FILE="/opt/echofree/.env"
+USER_NAME="jerry"
+USER_ID="$(id -u "$USER_NAME")"
+USER_GROUP="$(id -g "$USER_NAME")"
+
+echo "EchoFree first-boot setup"
+echo "-------------------------"
+echo
+echo "Detected capture devices:"
+sudo -u "$USER_NAME" arecord -L 2>/dev/null | sed -n '1,40p' || true
+echo
+echo "Detected playback devices:"
+sudo -u "$USER_NAME" aplay -L 2>/dev/null | sed -n '1,40p' || true
+echo
+
+read -r -p "Room/device name [living-room]: " NAME
+NAME="${NAME:-living-room}"
+NAME="$(echo "$NAME" | tr '[:upper:] _' '[:lower:]--' | tr -cd 'a-z0-9-')"
+
+DEFAULT_IF="$(ip route show default 2>/dev/null | awk 'NR==1 {print $5}')"
+read -r -p "Network interface [${DEFAULT_IF}]: " NET_IF
+NET_IF="${NET_IF:-$DEFAULT_IF}"
+
+read -r -p "Microphone device [automatic]: " INPUT
+read -r -p "Speaker device [automatic]: " OUTPUT
+read -r -p "Wake model [okay_nabu]: " WAKE
+WAKE="${WAKE:-okay_nabu}"
+read -r -p "Enable microphone auto gain? [y/N]: " AUTO_GAIN
+read -r -p "Enable microphone noise suppression? [y/N]: " NOISE
+
+AG=0
+NS=0
+[[ "$AUTO_GAIN" =~ ^[Yy] ]] && AG=1
+[[ "$NOISE" =~ ^[Yy] ]] && NS=1
+
+hostnamectl set-hostname "$NAME"
+
+cat >"$ENV_FILE" <<EOF
+LVA_IMAGE="ghcr.io/ohf-voice/linux-voice-assistant"
+LVA_IMAGE_TAG="1.1.13"
+LVA_USER_ID="${USER_ID}"
+LVA_USER_GROUP="${USER_GROUP}"
+LVA_PULSE_SERVER="/run/user/${USER_ID}/pulse/native"
+LVA_XDG_RUNTIME_DIR="/run/user/${USER_ID}"
+LVA_PULSE_COOKIE="/run/user/${USER_ID}/pulse/cookie"
+CLIENT_NAME="${NAME}"
+HOST="0.0.0.0"
+PORT="6053"
+NETWORK_INTERFACE="${NET_IF}"
+AUDIO_INPUT_DEVICE="${INPUT}"
+AUDIO_OUTPUT_DEVICE="${OUTPUT}"
+WAKE_MODEL="${WAKE}"
+MIC_VOLUME="100"
+MIC_AUTO_GAIN="${AG}"
+MIC_NOISE_SUPPRESSION="${NS}"
+EOF
+
+chown -R "$USER_NAME:$USER_NAME" /opt/echofree
+
+systemctl --user -M "${USER_NAME}@" enable --now pipewire.service pipewire-pulse.service wireplumber.service 2>/dev/null || true
+
+cd /opt/echofree
+docker compose pull
+docker compose up -d
+
+echo
+echo "EchoFree is starting."
+echo "Run: echofree-status"
+echo "Then check Home Assistant > Settings > Devices & services for ESPHome discovery."

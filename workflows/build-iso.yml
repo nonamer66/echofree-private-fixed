@@ -1,0 +1,38 @@
+name: Build EchoFree ISO
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Install ISO build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xorriso isolinux syslinux-utils curl gzip cpio rsync
+
+      - name: Build ISO
+        run: sudo ./build-iso.sh
+
+      - name: Generate checksum
+        run: sha256sum output/echofree-amd64.iso > output/echofree-amd64.iso.sha256
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: EchoFree-amd64-ISO
+          path: |
+            output/echofree-amd64.iso
+            output/echofree-amd64.iso.sha256
+          if-no-files-found: error
+          retention-days: 30

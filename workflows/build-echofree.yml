@@ -1,0 +1,45 @@
+name: Build EchoFree ISO
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "build-iso.sh"
+      - "preseed.cfg"
+      - "payload/**"
+      - ".github/workflows/build-echofree.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xorriso isolinux syslinux-utils curl gzip cpio rsync
+
+      - name: Build EchoFree ISO
+        run: |
+          chmod +x build-iso.sh
+          sudo ./build-iso.sh
+
+      - name: Create checksum
+        run: |
+          cd output
+          sha256sum echofree-amd64.iso > echofree-amd64.iso.sha256
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EchoFree-amd64-ISO
+          path: |
+            output/echofree-amd64.iso
+            output/echofree-amd64.iso.sha256
+          if-no-files-found: error
+          retention-days: 14

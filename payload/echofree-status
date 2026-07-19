@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -u
+
+echo "=== Host ==="
+hostnamectl --static
+ip -brief address
+echo
+
+echo "=== Audio ==="
+echo "Capture:"
+arecord -l 2>/dev/null || true
+echo
+echo "Playback:"
+aplay -l 2>/dev/null || true
+echo
+
+echo "=== PipeWire/Pulse ==="
+pactl info 2>/dev/null | sed -n '1,12p' || echo "PulseAudio compatibility socket not available."
+echo
+
+echo "=== Docker ==="
+systemctl is-active docker || true
+docker compose -f /opt/echofree/docker-compose.yml --env-file /opt/echofree/.env ps 2>/dev/null || true
+echo
+
+echo "=== Recent LVA logs ==="
+docker logs --tail 60 linux-voice-assistant 2>&1 || true
